@@ -17,6 +17,7 @@ def test_args():
     parser.add_argument('--resume', default='', type=str, metavar='PATH',
                         help='path to latest checkpoint (default: none)')
     parser.add_argument('--manualSeed', type=int, default=777, help='manual seed')
+    parser.add_argument('--numClasses', type=int, default=300, help='action recognition classes')
 
     #Device options
     parser.add_argument('--gpu-id', default='0', type=str,
@@ -66,7 +67,7 @@ def test_args():
         args.device = 'cuda'
     else:
         args.device = 'cpu'
-
+    # args.device = 'cpu'
     # Set seed
     random.seed(args.manualSeed)
     torch.manual_seed(args.manualSeed)
@@ -77,6 +78,8 @@ def test_args():
 
 def train_args():
     parser = argparse.ArgumentParser(description='Video Walk Training')
+
+    parser.add_argument('--numClasses', type=int, default=300, help='action recognition classes')
 
     parser.add_argument('--data-path', default='/data/ajabri/kinetics/',
         help='/home/ajabri/data/places365_standard/train/ | /data/ajabri/kinetics/')

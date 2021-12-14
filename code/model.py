@@ -221,3 +221,73 @@ class CRW(nn.Module):
         xent_loss = self.xent(torch.log(AA + EPS).flatten(0, -2), self.xent_targets(AA))
 
         utils.visualize.frame_pair(x, q, mm, t1, t2, A, AA, xent_loss, self.vis.vis)
+
+
+class ClassificationModel(nn.Module):
+    def __init__(self, args, vis=None):
+        super(ClassificationModel, self).__init__()
+        self.args = args
+        self.crw_model = CRW(self.args)
+
+
+        self.classifier = nn.Sequential(
+            nn.Conv3d(512, 128, (1,4,30)),
+            nn.MaxPool3d((1,20,1), (1,15,1)),
+            nn.ReLU(),
+            nn.Flatten(),
+            nn.Linear(1536, 128),
+            nn.Sigmoid(),
+            nn.Linear(128, self.args.numClasses),
+            nn.Softmax()
+        )
+
+        self.vis = vis
+
+    def forward(self, x, y, just_feats=False, ):
+        '''
+        Input is B x T x N*C x H x W, where either
+           N>1 -> list of patches of images
+           N=1 -> list of images
+        '''
+        B, T, C, H, W = x.shape
+        _N, C = C // 3, 3
+
+        #################################################################
+        # Pixels to Nodes
+        #################################################################
+        x = x.transpose(1, 2).view(B, _N, C, T, H, W)
+        # q, mm = self.crw_model.pixels_to_nodes(x)
+        # B, C, T, N = q.shape
+        #
+        # if just_feats:
+        #     h, w = np.ceil(np.array(x.shape[-2:]) / self.crw_model.map_scale).astype(np.int)
+        #     return (q, mm) if _N > 1 else (q, q.view(*q.shape[:-1], h, w))
+
+        bsize = B  # minibatch size for computing features
+        feats = []
+        for b in range(0, x.shape[1], bsize):
+            # print(x[:, b:b + bsize].shape)
+            feat = self.crw_model.encoder(x[:, b:b + bsize].flatten(0, 1).to(self.args.device))
+            feats.append(feat.cpu())
+        feats = torch.cat(feats, dim=2).squeeze(1)
+
+        classification = self.classifier(feats.to(self.args.device))
+        ce_loss = torch.nn.CrossEntropyLoss()
+        loss = ce_loss(classification, y)
+        #################################################################
+        # Compute loss
+        #################################################################
+
+
+        # #################################################################
+        # # Visualizations
+        # #################################################################
+        # if (np.random.random() < 0.02) and (self.vis is not None):  # and False:
+        #     with torch.no_grad():
+        #         self.visualize_frame_pair(x, q, mm)
+        #         if _N > 1:  # and False:
+        #             self.visualize_patches(x, q)
+        #
+        # loss = sum(xents) / max(1, len(xents) - 1)
+
+        return feats, loss
